@@ -2,11 +2,11 @@
   {
     "id": "zpmeim375oime07kvyr",
     "userId": "demo-user-id",
-    "date": "2025-08-06T16:54:54.674Z",
-    "totalQuestions": 5,
-    "totalCorrect": 4,
-    "totalTimeSpent": 25,
-    "targetAchieved": false,
-    "streakDay": false
+    "date": "2025-08-06T17:03:48.684Z",
+    "totalQuestions": 35,
+    "totalCorrect": 29,
+    "totalTimeSpent": 135,
+    "targetAchieved": true,
+    "streakDay": true
   }
 ]

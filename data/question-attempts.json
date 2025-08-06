@@ -9,5 +9,38 @@
     "correctAnswers": 4,
     "difficulty": "Medium",
     "timeSpent": 25
+  },
+  {
+    "id": "rwuepauefhcme07vzrp",
+    "userId": "demo-user-id",
+    "attemptDate": "2025-08-06T17:03:32.821Z",
+    "subjectId": "y98nw5jrq2cme07kgy3",
+    "topic": "Network Analysis Techniques",
+    "questionsAttempted": 10,
+    "correctAnswers": 8,
+    "difficulty": "Medium",
+    "timeSpent": 45
+  },
+  {
+    "id": "lv3xawsak6sme07wbyc",
+    "userId": "demo-user-id",
+    "attemptDate": "2025-08-06T17:03:48.612Z",
+    "subjectId": "71vrewftccgme07kgy7",
+    "topic": "BJT Characteristics",
+    "questionsAttempted": 8,
+    "correctAnswers": 6,
+    "difficulty": "Hard",
+    "timeSpent": 35
+  },
+  {
+    "id": "uudcrthgtqome07wc0b",
+    "userId": "demo-user-id",
+    "attemptDate": "2025-08-06T17:03:48.683Z",
+    "subjectId": "o1px4pnrhcjme07kgy7",
+    "topic": "Op-Amp Applications",
+    "questionsAttempted": 12,
+    "correctAnswers": 11,
+    "difficulty": "Easy",
+    "timeSpent": 30
   }
 ]
