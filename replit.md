@@ -4,7 +4,9 @@ A GATE ECE (Graduate Aptitude Test in Engineering - Electronics and Communicatio
 
 # User Preferences
 
-Preferred communication style: Simple, everyday language.
+- Preferred communication style: Simple, everyday language.
+- Data storage: JSON files instead of database
+- Recent Changes: Converted from PostgreSQL to JSON file storage for simplified deployment and data management
 
 # System Architecture
 
@@ -27,14 +29,14 @@ Preferred communication style: Simple, everyday language.
 - **Storage abstraction layer** for database operations
 
 ## Database Design
-- **PostgreSQL** database with Neon serverless connection
-- **Drizzle migrations** for schema management
-- **Normalized schema** with tables for:
-  - Users (authentication and settings)
-  - Subjects (GATE ECE curriculum subjects)
-  - Question attempts (study session tracking)
-  - Daily progress (streak and target tracking)
-  - User settings (preferences and reminders)
+- **JSON file storage** for simplified data persistence
+- **Local file-based storage** with automatic directory creation
+- **Data files** for:
+  - subjects.json - GATE ECE curriculum subjects with topics
+  - question-attempts.json - Study session tracking
+  - daily-progress.json - Daily targets and streak tracking  
+  - user-settings.json - User preferences and reminders
+  - users.json - User authentication data
 
 ## Key Design Patterns
 - **Repository Pattern**: Storage abstraction layer isolates database logic

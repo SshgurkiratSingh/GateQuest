@@ -1,0 +1,167 @@
+[
+  {
+    "id": "y98nw5jrq2cme07kgy3",
+    "name": "Networks, Signals & Systems",
+    "code": "NSS",
+    "weightage": "15.0",
+    "topics": [
+      "Network Analysis Techniques",
+      "Network Theorems",
+      "Two-port Networks",
+      "Filters",
+      "Continuous-time Signals",
+      "Fourier Series",
+      "Fourier Transform",
+      "Discrete-time Signals",
+      "DFT and FFT",
+      "Z-Transform",
+      "LTI Systems",
+      "Convolution",
+      "Sampling Theorem"
+    ]
+  },
+  {
+    "id": "71vrewftccgme07kgy7",
+    "name": "Electronic Devices",
+    "code": "ED",
+    "weightage": "12.0",
+    "topics": [
+      "PN Junction Diodes",
+      "Zener Diodes",
+      "BJT Characteristics",
+      "BJT Models",
+      "MOSFET Characteristics",
+      "MOSFET Models",
+      "Semiconductor Memories",
+      "ROM and RAM",
+      "LED and Photodiodes",
+      "Solar Cells",
+      "Power Devices",
+      "Thyristors"
+    ]
+  },
+  {
+    "id": "o1px4pnrhcjme07kgy7",
+    "name": "Analog Circuits",
+    "code": "AC",
+    "weightage": "12.0",
+    "topics": [
+      "Diode Circuits",
+      "Rectifiers",
+      "Voltage Regulators",
+      "BJT Amplifiers",
+      "MOSFET Amplifiers",
+      "Operational Amplifiers",
+      "Op-Amp Applications",
+      "Feedback Amplifiers",
+      "Oscillators",
+      "Active Filters",
+      "Comparators",
+      "ADC and DAC"
+    ]
+  },
+  {
+    "id": "x87e0ojndybme07kgy8",
+    "name": "Digital Circuits",
+    "code": "DC",
+    "weightage": "10.0",
+    "topics": [
+      "Number Systems",
+      "Boolean Algebra",
+      "Karnaugh Maps",
+      "Logic Gates",
+      "CMOS Implementation",
+      "Combinational Circuits",
+      "Decoders and Multiplexers",
+      "Sequential Circuits",
+      "Flip-Flops",
+      "Counters and Registers",
+      "Finite State Machines",
+      "Memory Elements"
+    ]
+  },
+  {
+    "id": "j6kzlu7l55sme07kgy9",
+    "name": "Control Systems",
+    "code": "CS",
+    "weightage": "10.0",
+    "topics": [
+      "Open and Closed Loop Systems",
+      "Transfer Functions",
+      "Block Diagrams",
+      "Signal Flow Graphs",
+      "Mason's Gain Formula",
+      "Time Domain Analysis",
+      "Frequency Domain Analysis",
+      "Bode Plots",
+      "Nyquist Plots",
+      "Stability Analysis",
+      "Routh-Hurwitz Criteria",
+      "Root Locus",
+      "PID Controllers"
+    ]
+  },
+  {
+    "id": "l2z90dd3oibme07kgy9",
+    "name": "Communications",
+    "code": "COM",
+    "weightage": "12.0",
+    "topics": [
+      "Analog Modulation",
+      "AM, FM, PM",
+      "Digital Modulation",
+      "ASK, PSK, FSK",
+      "QAM",
+      "Pulse Modulation",
+      "PCM",
+      "Digital Communication",
+      "Information Theory",
+      "Channel Capacity",
+      "Source Coding",
+      "Channel Coding",
+      "Multiple Access",
+      "Mobile Communication"
+    ]
+  },
+  {
+    "id": "m4bbw9tvwzbme07kgya",
+    "name": "Electromagnetics",
+    "code": "EM",
+    "weightage": "10.0",
+    "topics": [
+      "Maxwell's Equations",
+      "Electromagnetic Waves",
+      "Wave Propagation",
+      "Transmission Lines",
+      "Smith Chart",
+      "Waveguides",
+      "Rectangular Waveguides",
+      "Circular Waveguides",
+      "Antennas",
+      "Dipole and Monopole",
+      "Antenna Arrays",
+      "Microwave Devices",
+      "Optical Fibers"
+    ]
+  },
+  {
+    "id": "0yjkpdiktr7me07kgyb",
+    "name": "Engineering Mathematics",
+    "code": "MATH",
+    "weightage": "15.0",
+    "topics": [
+      "Linear Algebra",
+      "Matrix Operations",
+      "Eigenvalues",
+      "Calculus",
+      "Differential Equations",
+      "Partial Derivatives",
+      "Multiple Integrals",
+      "Vector Analysis",
+      "Complex Variables",
+      "Probability",
+      "Statistics",
+      "Numerical Methods"
+    ]
+  }
+]

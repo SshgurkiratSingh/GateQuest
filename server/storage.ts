@@ -1,9 +1,4 @@
 import { 
-  users, 
-  subjects, 
-  questionAttempts, 
-  dailyProgress, 
-  userSettings,
   type User, 
   type InsertUser,
   type Subject,
@@ -15,8 +10,8 @@ import {
   type UserSettings,
   type InsertUserSettings
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { promises as fs } from "fs";
+import { join } from "path";
 
 export interface IStorage {
   // User methods
@@ -51,149 +46,177 @@ export interface IStorage {
   updateUserSettings(userId: string, settings: Partial<InsertUserSettings>): Promise<UserSettings>;
 }
 
-export class DatabaseStorage implements IStorage {
+const DATA_DIR = join(process.cwd(), 'data');
+const USERS_FILE = join(DATA_DIR, 'users.json');
+const SUBJECTS_FILE = join(DATA_DIR, 'subjects.json');
+const QUESTION_ATTEMPTS_FILE = join(DATA_DIR, 'question-attempts.json');
+const DAILY_PROGRESS_FILE = join(DATA_DIR, 'daily-progress.json');
+const USER_SETTINGS_FILE = join(DATA_DIR, 'user-settings.json');
+
+interface JsonData {
+  users: User[];
+  subjects: Subject[];
+  questionAttempts: QuestionAttempt[];
+  dailyProgress: DailyProgress[];
+  userSettings: UserSettings[];
+}
+
+export class JsonStorage implements IStorage {
+  private async ensureDataDir(): Promise<void> {
+    try {
+      await fs.mkdir(DATA_DIR, { recursive: true });
+    } catch (error) {
+      // Directory already exists
+    }
+  }
+
+  private async readJsonFile<T>(filepath: string, defaultValue: T): Promise<T> {
+    try {
+      const data = await fs.readFile(filepath, 'utf-8');
+      return JSON.parse(data);
+    } catch (error) {
+      await this.writeJsonFile(filepath, defaultValue);
+      return defaultValue;
+    }
+  }
+
+  private async writeJsonFile<T>(filepath: string, data: T): Promise<void> {
+    await this.ensureDataDir();
+    await fs.writeFile(filepath, JSON.stringify(data, null, 2), 'utf-8');
+  }
+
+  private generateId(): string {
+    return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  }
+
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+    const users = await this.readJsonFile<User[]>(USERS_FILE, []);
+    return users.find(u => u.id === id);
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
+    const users = await this.readJsonFile<User[]>(USERS_FILE, []);
+    return users.find(u => u.username === username);
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
-    return user;
+    const users = await this.readJsonFile<User[]>(USERS_FILE, []);
+    const newUser: User = {
+      id: this.generateId(),
+      ...insertUser,
+      createdAt: new Date(),
+    };
+    users.push(newUser);
+    await this.writeJsonFile(USERS_FILE, users);
+    return newUser;
   }
 
   async getAllSubjects(): Promise<Subject[]> {
-    return await db.select().from(subjects).orderBy(subjects.name);
+    return await this.readJsonFile<Subject[]>(SUBJECTS_FILE, []);
   }
 
   async getSubject(id: string): Promise<Subject | undefined> {
-    const [subject] = await db.select().from(subjects).where(eq(subjects.id, id));
-    return subject || undefined;
+    const subjects = await this.readJsonFile<Subject[]>(SUBJECTS_FILE, []);
+    return subjects.find(s => s.id === id);
   }
 
-  async createSubject(subject: InsertSubject): Promise<Subject> {
-    const [newSubject] = await db
-      .insert(subjects)
-      .values(subject)
-      .returning();
+  async createSubject(insertSubject: InsertSubject): Promise<Subject> {
+    const subjects = await this.readJsonFile<Subject[]>(SUBJECTS_FILE, []);
+    const newSubject: Subject = {
+      id: this.generateId(),
+      ...insertSubject,
+    };
+    subjects.push(newSubject);
+    await this.writeJsonFile(SUBJECTS_FILE, subjects);
     return newSubject;
   }
 
   async createQuestionAttempt(userId: string, attempt: InsertQuestionAttempt): Promise<QuestionAttempt> {
-    const [questionAttempt] = await db
-      .insert(questionAttempts)
-      .values({ ...attempt, userId })
-      .returning();
-    return questionAttempt;
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    const newAttempt: QuestionAttempt = {
+      id: this.generateId(),
+      userId,
+      attemptDate: new Date(),
+      ...attempt,
+    };
+    attempts.push(newAttempt);
+    await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, attempts);
+    return newAttempt;
   }
 
   async getQuestionAttemptsByUser(userId: string, limit: number = 100): Promise<QuestionAttempt[]> {
-    return await db
-      .select()
-      .from(questionAttempts)
-      .where(eq(questionAttempts.userId, userId))
-      .orderBy(desc(questionAttempts.attemptDate))
-      .limit(limit);
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    return attempts
+      .filter(a => a.userId === userId)
+      .sort((a, b) => new Date(b.attemptDate).getTime() - new Date(a.attemptDate).getTime())
+      .slice(0, limit);
   }
 
   async getQuestionAttemptsByDate(userId: string, date: Date): Promise<QuestionAttempt[]> {
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    return await db
-      .select()
-      .from(questionAttempts)
-      .where(
-        and(
-          eq(questionAttempts.userId, userId),
-          gte(questionAttempts.attemptDate, startOfDay),
-          lte(questionAttempts.attemptDate, endOfDay)
-        )
-      )
-      .orderBy(desc(questionAttempts.attemptDate));
+    return attempts.filter(a => 
+      a.userId === userId && 
+      new Date(a.attemptDate) >= startOfDay && 
+      new Date(a.attemptDate) <= endOfDay
+    ).sort((a, b) => new Date(b.attemptDate).getTime() - new Date(a.attemptDate).getTime());
   }
 
   async getQuestionAttemptsBySubject(userId: string, subjectId: string): Promise<QuestionAttempt[]> {
-    return await db
-      .select()
-      .from(questionAttempts)
-      .where(
-        and(
-          eq(questionAttempts.userId, userId),
-          eq(questionAttempts.subjectId, subjectId)
-        )
-      )
-      .orderBy(desc(questionAttempts.attemptDate));
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    return attempts
+      .filter(a => a.userId === userId && a.subjectId === subjectId)
+      .sort((a, b) => new Date(b.attemptDate).getTime() - new Date(a.attemptDate).getTime());
   }
 
   async getDailyProgress(userId: string, date: Date): Promise<DailyProgress | undefined> {
+    const progress = await this.readJsonFile<DailyProgress[]>(DAILY_PROGRESS_FILE, []);
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const [progress] = await db
-      .select()
-      .from(dailyProgress)
-      .where(
-        and(
-          eq(dailyProgress.userId, userId),
-          gte(dailyProgress.date, startOfDay),
-          lte(dailyProgress.date, endOfDay)
-        )
-      );
-    return progress || undefined;
+    return progress.find(p => 
+      p.userId === userId && 
+      new Date(p.date) >= startOfDay && 
+      new Date(p.date) <= endOfDay
+    );
   }
 
-  async updateDailyProgress(userId: string, progress: InsertDailyProgress): Promise<DailyProgress> {
-    const existing = await this.getDailyProgress(userId, progress.date);
+  async updateDailyProgress(userId: string, progressData: InsertDailyProgress): Promise<DailyProgress> {
+    const progressList = await this.readJsonFile<DailyProgress[]>(DAILY_PROGRESS_FILE, []);
+    const existing = await this.getDailyProgress(userId, progressData.date);
     
     if (existing) {
-      const [updated] = await db
-        .update(dailyProgress)
-        .set({
-          totalQuestions: progress.totalQuestions,
-          totalCorrect: progress.totalCorrect,
-          totalTimeSpent: progress.totalTimeSpent,
-          targetAchieved: progress.targetAchieved,
-          streakDay: progress.streakDay,
-        })
-        .where(eq(dailyProgress.id, existing.id))
-        .returning();
+      const index = progressList.findIndex(p => p.id === existing.id);
+      const updated = { ...existing, ...progressData };
+      progressList[index] = updated;
+      await this.writeJsonFile(DAILY_PROGRESS_FILE, progressList);
       return updated;
     } else {
-      const [created] = await db
-        .insert(dailyProgress)
-        .values({ ...progress, userId })
-        .returning();
-      return created;
+      const newProgress: DailyProgress = {
+        id: this.generateId(),
+        userId,
+        ...progressData,
+      };
+      progressList.push(newProgress);
+      await this.writeJsonFile(DAILY_PROGRESS_FILE, progressList);
+      return newProgress;
     }
   }
 
   async getProgressHistory(userId: string, days: number): Promise<DailyProgress[]> {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
+    const progress = await this.readJsonFile<DailyProgress[]>(DAILY_PROGRESS_FILE, []);
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
     
-    return await db
-      .select()
-      .from(dailyProgress)
-      .where(
-        and(
-          eq(dailyProgress.userId, userId),
-          gte(dailyProgress.date, date)
-        )
-      )
-      .orderBy(desc(dailyProgress.date));
+    return progress
+      .filter(p => p.userId === userId && new Date(p.date) >= cutoffDate)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async getCurrentStreak(userId: string): Promise<number> {
@@ -212,21 +235,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSubjectStats(userId: string): Promise<any[]> {
-    const result = await db
-      .select({
-        subjectId: questionAttempts.subjectId,
-        subjectName: subjects.name,
-        totalQuestions: sql<number>`sum(${questionAttempts.questionsAttempted})`,
-        totalCorrect: sql<number>`sum(${questionAttempts.correctAnswers})`,
-        totalTime: sql<number>`sum(${questionAttempts.timeSpent})`,
-        attemptCount: sql<number>`count(*)`,
-      })
-      .from(questionAttempts)
-      .innerJoin(subjects, eq(questionAttempts.subjectId, subjects.id))
-      .where(eq(questionAttempts.userId, userId))
-      .groupBy(questionAttempts.subjectId, subjects.name);
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    const subjects = await this.readJsonFile<Subject[]>(SUBJECTS_FILE, []);
+    
+    const userAttempts = attempts.filter(a => a.userId === userId);
+    const subjectMap = new Map<string, any>();
+    
+    userAttempts.forEach(attempt => {
+      const subject = subjects.find(s => s.id === attempt.subjectId);
+      if (!subject) return;
+      
+      if (!subjectMap.has(attempt.subjectId)) {
+        subjectMap.set(attempt.subjectId, {
+          subjectId: attempt.subjectId,
+          subjectName: subject.name,
+          totalQuestions: 0,
+          totalCorrect: 0,
+          totalTime: 0,
+          attemptCount: 0,
+        });
+      }
+      
+      const stat = subjectMap.get(attempt.subjectId);
+      stat.totalQuestions += attempt.questionsAttempted;
+      stat.totalCorrect += attempt.correctAnswers;
+      stat.totalTime += attempt.timeSpent;
+      stat.attemptCount += 1;
+    });
 
-    return result.map(stat => ({
+    return Array.from(subjectMap.values()).map(stat => ({
       ...stat,
       accuracy: stat.totalQuestions > 0 ? Math.round((stat.totalCorrect / stat.totalQuestions) * 100) : 0,
       avgTime: stat.totalQuestions > 0 ? Math.round(stat.totalTime / stat.totalQuestions * 10) / 10 : 0,
@@ -236,65 +273,59 @@ export class DatabaseStorage implements IStorage {
   async getWeeklyStats(userId: string): Promise<any[]> {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-
-    return await db
-      .select()
-      .from(dailyProgress)
-      .where(
-        and(
-          eq(dailyProgress.userId, userId),
-          gte(dailyProgress.date, weekAgo)
-        )
-      )
-      .orderBy(dailyProgress.date);
+    
+    const progress = await this.readJsonFile<DailyProgress[]>(DAILY_PROGRESS_FILE, []);
+    return progress
+      .filter(p => p.userId === userId && new Date(p.date) >= weekAgo)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }
 
   async getUserStats(userId: string): Promise<any> {
-    const totalStats = await db
-      .select({
-        totalQuestions: sql<number>`sum(${questionAttempts.questionsAttempted})`,
-        totalCorrect: sql<number>`sum(${questionAttempts.correctAnswers})`,
-        totalTime: sql<number>`sum(${questionAttempts.timeSpent})`,
-      })
-      .from(questionAttempts)
-      .where(eq(questionAttempts.userId, userId));
-
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    const userAttempts = attempts.filter(a => a.userId === userId);
+    
+    const totalQuestions = userAttempts.reduce((sum, a) => sum + a.questionsAttempted, 0);
+    const totalCorrect = userAttempts.reduce((sum, a) => sum + a.correctAnswers, 0);
+    const totalTime = userAttempts.reduce((sum, a) => sum + a.timeSpent, 0);
     const streak = await this.getCurrentStreak(userId);
     
     return {
-      ...totalStats[0],
+      totalQuestions,
+      totalCorrect,
+      totalTime,
       currentStreak: streak,
-      accuracy: totalStats[0].totalQuestions > 0 ? 
-        Math.round((totalStats[0].totalCorrect / totalStats[0].totalQuestions) * 100) : 0,
+      accuracy: totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0,
     };
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {
-    const [settings] = await db
-      .select()
-      .from(userSettings)
-      .where(eq(userSettings.userId, userId));
-    return settings || undefined;
+    const settings = await this.readJsonFile<UserSettings[]>(USER_SETTINGS_FILE, []);
+    return settings.find(s => s.userId === userId);
   }
 
-  async updateUserSettings(userId: string, settings: Partial<InsertUserSettings>): Promise<UserSettings> {
+  async updateUserSettings(userId: string, settingsData: Partial<InsertUserSettings>): Promise<UserSettings> {
+    const settingsList = await this.readJsonFile<UserSettings[]>(USER_SETTINGS_FILE, []);
     const existing = await this.getUserSettings(userId);
     
     if (existing) {
-      const [updated] = await db
-        .update(userSettings)
-        .set(settings)
-        .where(eq(userSettings.userId, existing.id))
-        .returning();
+      const index = settingsList.findIndex(s => s.id === existing.id);
+      const updated = { ...existing, ...settingsData };
+      settingsList[index] = updated;
+      await this.writeJsonFile(USER_SETTINGS_FILE, settingsList);
       return updated;
     } else {
-      const [created] = await db
-        .insert(userSettings)
-        .values({ ...settings, userId })
-        .returning();
-      return created;
+      const newSettings: UserSettings = {
+        id: this.generateId(),
+        userId,
+        theme: "light",
+        reminderEnabled: true,
+        ...settingsData,
+      };
+      settingsList.push(newSettings);
+      await this.writeJsonFile(USER_SETTINGS_FILE, settingsList);
+      return newSettings;
     }
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new JsonStorage();

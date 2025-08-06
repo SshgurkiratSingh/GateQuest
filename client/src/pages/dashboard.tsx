@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
@@ -46,7 +46,12 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
-import { COLORS } from "@/lib/constants";
+import type { Subject, QuestionAttempt } from "@shared/schema";
+
+const COLORS = [
+  "#1976D2", "#388E3C", "#FF9800", "#9C27B0", 
+  "#F44336", "#607D8B", "#795548", "#3F51B5"
+];
 
 const questionAttemptSchema = z.object({
   subjectId: z.string().min(1, "Please select a subject"),
@@ -59,30 +64,63 @@ const questionAttemptSchema = z.object({
 
 type QuestionAttemptForm = z.infer<typeof questionAttemptSchema>;
 
+interface DailyProgressResponse {
+  progress?: {
+    totalQuestions: number;
+    totalCorrect: number;
+    totalTimeSpent: number;
+    targetAchieved: boolean;
+  };
+  attempts: QuestionAttempt[];
+  questionsToday: number;
+  accuracyRate: number;
+  timeSpent: number;
+}
+
+interface SubjectStat {
+  subjectId: string;
+  subjectName: string;
+  totalQuestions: number;
+  totalCorrect: number;
+  totalTime: number;
+  attemptCount: number;
+  accuracy: number;
+  avgTime: number;
+}
+
+interface WeeklyStat {
+  date: string;
+  totalQuestions: number;
+  totalCorrect: number;
+  totalTimeSpent: number;
+  targetAchieved: boolean;
+  streakDay: boolean;
+}
+
 export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [selectedSubject, setSelectedSubject] = useState<string>("");
 
-  // Queries
-  const { data: subjects = [] } = useQuery({
+  // Queries with proper typing
+  const { data: subjects = [] } = useQuery<Subject[]>({
     queryKey: ["/api/subjects"],
   });
 
-  const { data: todayProgress } = useQuery({
+  const { data: todayProgress } = useQuery<DailyProgressResponse>({
     queryKey: ["/api/daily-progress/today"],
     refetchInterval: 30000,
   });
 
-  const { data: weeklyStats = [] } = useQuery({
+  const { data: weeklyStats = [] } = useQuery<WeeklyStat[]>({
     queryKey: ["/api/analytics/weekly"],
   });
 
-  const { data: subjectStats = [] } = useQuery({
+  const { data: subjectStats = [] } = useQuery<SubjectStat[]>({
     queryKey: ["/api/analytics/subjects"],
   });
 
-  const { data: streak } = useQuery({
+  const { data: streak } = useQuery<{ streak: number }>({
     queryKey: ["/api/streak"],
   });
 
@@ -419,41 +457,32 @@ export default function Dashboard() {
                     className="w-full" 
                     disabled={addQuestionMutation.isPending}
                   >
-                    {addQuestionMutation.isPending ? "Saving..." : "Save Progress"}
+                    {addQuestionMutation.isPending ? "Logging..." : "Log Questions"}
                   </Button>
                 </form>
               </CardContent>
             </Card>
 
-            {/* Weekly Target Card */}
-            <Card className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20">
+            {/* Quick Stats */}
+            <Card>
               <CardHeader>
-                <CardTitle className="text-purple-800 dark:text-purple-300">
-                  <Target className="inline mr-2" size={20} />
-                  Weekly Goals
-                </CardTitle>
+                <CardTitle className="text-lg">Quick Stats</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-purple-700 dark:text-purple-300">Daily 30+ Questions</span>
-                  <div className="flex items-center">
-                    <Progress value={85} className="w-16 mr-2" />
-                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">6/7</span>
-                  </div>
+                  <span className="text-sm text-muted-foreground">Current Streak</span>
+                  <Badge variant="outline" className="bg-green-50 dark:bg-green-900/20">
+                    <Flame className="mr-1" size={12} />
+                    {streak?.streak || 0} days
+                  </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-purple-700 dark:text-purple-300">Cover 8 Subjects</span>
-                  <div className="flex items-center">
-                    <Progress value={75} className="w-16 mr-2" />
-                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">6/8</span>
-                  </div>
+                  <span className="text-sm text-muted-foreground">Total Subjects</span>
+                  <span className="font-semibold">{subjects.length}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-purple-700 dark:text-purple-300">70%+ Accuracy</span>
-                  <div className="flex items-center">
-                    <CheckCircle className="text-green-500 mr-2" size={16} />
-                    <span className="text-sm font-medium text-green-600 dark:text-green-400">{accuracyRate}% ✓</span>
-                  </div>
+                  <span className="text-sm text-muted-foreground">Questions Today</span>
+                  <span className="font-semibold">{questionsToday}</span>
                 </div>
               </CardContent>
             </Card>
@@ -461,45 +490,19 @@ export default function Dashboard() {
 
           {/* Right Column: Analytics */}
           <div className="lg:col-span-2 space-y-6">
-            
-            {/* Charts */}
-            <Tabs defaultValue="subjects" className="space-y-6">
+            <Tabs defaultValue="weekly" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="subjects">Subject Performance</TabsTrigger>
                 <TabsTrigger value="weekly">Weekly Progress</TabsTrigger>
+                <TabsTrigger value="subjects">Subject Analysis</TabsTrigger>
               </TabsList>
-              
-              <TabsContent value="subjects">
+
+              <TabsContent value="weekly" className="space-y-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Subject-wise Performance</CardTitle>
+                    <CardTitle>Weekly Progress Chart</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={subjectChartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="subject" />
-                          <YAxis yAxisId="left" />
-                          <YAxis yAxisId="right" orientation="right" />
-                          <Tooltip />
-                          <Legend />
-                          <Bar yAxisId="left" dataKey="questions" fill="hsl(var(--primary))" name="Questions" />
-                          <Line yAxisId="right" dataKey="accuracy" stroke="hsl(var(--destructive))" name="Accuracy %" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              
-              <TabsContent value="weekly">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Weekly Progress Trend</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-64">
+                    <div className="h-80">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={weeklyChartData}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -507,114 +510,144 @@ export default function Dashboard() {
                           <YAxis />
                           <Tooltip />
                           <Legend />
-                          <Line dataKey="questions" stroke="hsl(var(--primary))" name="Daily Questions" strokeWidth={2} />
-                          <Line dataKey="target" stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" name="Target (30)" />
+                          <Line 
+                            type="monotone" 
+                            dataKey="questions" 
+                            stroke="#2563eb" 
+                            strokeWidth={3}
+                            name="Questions Attempted"
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="target" 
+                            stroke="#dc2626" 
+                            strokeDasharray="5 5"
+                            name="Daily Target"
+                          />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
                   </CardContent>
                 </Card>
               </TabsContent>
-            </Tabs>
 
-            {/* Subject Breakdown Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Detailed Subject Analysis</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Subject</TableHead>
-                      <TableHead>Questions</TableHead>
-                      <TableHead>Accuracy</TableHead>
-                      <TableHead>Avg Time</TableHead>
-                      <TableHead>Trend</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {subjectStats.map((stat, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{stat.subjectName}</TableCell>
-                        <TableCell>
-                          {stat.totalQuestions} 
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({Math.round((stat.totalQuestions / subjectStats.reduce((sum, s) => sum + s.totalQuestions, 0)) * 100)}%)
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={stat.accuracy >= 75 ? "default" : stat.accuracy >= 60 ? "secondary" : "destructive"}
-                          >
-                            {stat.accuracy}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{stat.avgTime} min</TableCell>
-                        <TableCell>
-                          {stat.accuracy >= 75 ? (
-                            <TrendingUp className="text-green-500" size={16} />
-                          ) : (
-                            <AlertTriangle className="text-yellow-500" size={16} />
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+              <TabsContent value="subjects" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Subject-wise Performance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {subjectStats.length > 0 ? (
+                      <div className="space-y-4">
+                        <div className="h-80">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={subjectChartData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="subject" />
+                              <YAxis />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="questions" fill="#2563eb" name="Questions Attempted" />
+                              <Bar dataKey="accuracy" fill="#16a34a" name="Accuracy %" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="mt-6">
+                          <h4 className="text-lg font-semibold mb-4">Detailed Subject Analysis</h4>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Subject</TableHead>
+                                <TableHead>Questions</TableHead>
+                                <TableHead>Accuracy</TableHead>
+                                <TableHead>Avg Time</TableHead>
+                                <TableHead>Sessions</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {subjectStats.map((stat, index) => (
+                                <TableRow key={stat.subjectId}>
+                                  <TableCell>
+                                    <div className="flex items-center">
+                                      <div 
+                                        className="w-3 h-3 rounded-full mr-2"
+                                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                                      />
+                                      {stat.subjectName}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>{stat.totalQuestions}</TableCell>
+                                  <TableCell>
+                                    <Badge 
+                                      variant={stat.accuracy >= 70 ? "default" : "secondary"}
+                                      className={stat.accuracy >= 70 ? "bg-green-500" : "bg-orange-500"}
+                                    >
+                                      {stat.accuracy}%
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>{stat.avgTime} min</TableCell>
+                                  <TableCell>{stat.attemptCount}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                          No data available yet
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          Start logging your question attempts to see detailed analytics
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
 
-        {/* Syllabus Coverage */}
+        {/* Syllabus Overview */}
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle>
-              <BookOpen className="inline mr-2" size={20} />
-              GATE ECE 2025 Syllabus Coverage
+            <CardTitle className="flex items-center">
+              <BookOpen className="mr-2" size={20} />
+              GATE ECE Syllabus Overview
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {subjects.slice(0, 4).map((subject, index) => {
-                const stats = subjectStats.find(s => s.subjectId === subject.id);
-                const coverage = stats ? Math.min((stats.totalQuestions / 50) * 100, 100) : 0;
+              {subjects.map((subject, index) => {
+                const subjectStat = subjectStats.find(s => s.subjectId === subject.id);
+                const progress = subjectStat ? subjectStat.totalQuestions : 0;
                 
                 return (
-                  <div key={subject.id} className={`rounded-lg p-4 border ${
-                    index === 0 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700' :
-                    index === 1 ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700' :
-                    index === 2 ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700' :
-                    'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
-                  }`}>
-                    <h4 className={`font-medium mb-2 ${
-                      index === 0 ? 'text-blue-800 dark:text-blue-300' :
-                      index === 1 ? 'text-green-800 dark:text-green-300' :
-                      index === 2 ? 'text-yellow-800 dark:text-yellow-300' :
-                      'text-purple-800 dark:text-purple-300'
-                    }`}>{subject.name}</h4>
-                    <div className={`text-xs space-y-1 ${
-                      index === 0 ? 'text-blue-600 dark:text-blue-400' :
-                      index === 1 ? 'text-green-600 dark:text-green-400' :
-                      index === 2 ? 'text-yellow-600 dark:text-yellow-400' :
-                      'text-purple-600 dark:text-purple-400'
-                    }`}>
-                      {subject.topics.slice(0, 4).map((topic, topicIndex) => (
-                        <div key={topicIndex} className="flex justify-between">
-                          <span>{topic}</span>
-                          <span className="font-medium">{Math.floor(Math.random() * 30) + 70}%</span>
+                  <div key={subject.id} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-sm">{subject.name}</h4>
+                      <Badge variant="outline" className="text-xs">
+                        {subject.weightage}%
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {subject.topics.length} topics • {progress} questions attempted
+                    </p>
+                    <div className="space-y-1">
+                      {subject.topics.slice(0, 3).map((topic, topicIndex) => (
+                        <div key={topicIndex} className="text-xs text-muted-foreground">
+                          • {topic}
                         </div>
                       ))}
-                    </div>
-                    <div className="mt-3">
-                      <Progress value={coverage} className="h-2" />
-                      <p className={`text-xs mt-1 ${
-                        index === 0 ? 'text-blue-600 dark:text-blue-400' :
-                        index === 1 ? 'text-green-600 dark:text-green-400' :
-                        index === 2 ? 'text-yellow-600 dark:text-yellow-400' :
-                        'text-purple-600 dark:text-purple-400'
-                      }`}>Overall: {Math.round(coverage)}% covered</p>
+                      {subject.topics.length > 3 && (
+                        <div className="text-xs text-muted-foreground">
+                          +{subject.topics.length - 3} more topics
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -623,92 +656,45 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Reminder System */}
-        <Card className="mt-8 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20">
+        {/* Reminders and Notifications */}
+        <Card className="mt-8 border-orange-200 bg-orange-50 dark:bg-orange-900/20">
           <CardHeader>
-            <CardTitle className="text-red-800 dark:text-red-300">
-              <Bell className="inline mr-2" size={20} />
-              Study Reminders & Alerts
+            <CardTitle className="flex items-center text-orange-800 dark:text-orange-200">
+              <Bell className="mr-2" size={20} />
+              Daily Reminder
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base text-red-700 dark:text-red-400">Today's Alerts</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-700 dark:text-orange-300">
                   {questionsToday >= dailyTarget ? (
-                    <div className="flex items-center text-green-600 dark:text-green-400">
-                      <CheckCircle className="mr-2" size={16} />
-                      <span>Daily target achieved! ({questionsToday}/{dailyTarget} questions)</span>
-                    </div>
+                    <>
+                      <CheckCircle className="inline mr-2" size={16} />
+                      Congratulations! You've achieved today's target of {dailyTarget} questions.
+                    </>
                   ) : (
-                    <div className="flex items-center text-orange-600 dark:text-orange-400">
-                      <AlertTriangle className="mr-2" size={16} />
-                      <span>Daily target pending ({questionsToday}/{dailyTarget} questions)</span>
-                    </div>
+                    <>
+                      <AlertTriangle className="inline mr-2" size={16} />
+                      You need {dailyTarget - questionsToday} more questions to reach today's target.
+                    </>
                   )}
-                  {accuracyRate < 70 && (
-                    <div className="flex items-center text-red-600 dark:text-red-400">
-                      <AlertTriangle className="mr-2" size={16} />
-                      <span>Overall accuracy below 70%</span>
-                    </div>
-                  )}
-                  <div className="flex items-center text-blue-600 dark:text-blue-400">
-                    <Info className="mr-2" size={16} />
-                    <span>{streak?.streak || 0}-day streak maintained!</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base text-red-700 dark:text-red-400">Study Schedule</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Morning Session</span>
-                    <span className="font-medium">9:00 AM - 12:00 PM</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Evening Session</span>
-                    <span className="font-medium">6:00 PM - 9:00 PM</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Next Reminder</span>
-                    <span className="font-medium text-blue-600 dark:text-blue-400">6:00 PM Today</span>
-                  </div>
-                  <Button size="sm" variant="outline" className="w-full mt-3">
-                    Configure Reminders
-                  </Button>
-                </CardContent>
-              </Card>
+                </p>
+                <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                  Current streak: {streak?.streak || 0} days
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">
+                  {Math.round(progressPercentage)}%
+                </p>
+                <p className="text-xs text-orange-600 dark:text-orange-400">
+                  of daily target
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t px-4 py-2">
-        <div className="flex justify-around">
-          <Button variant="ghost" size="sm" className="flex flex-col py-2 text-primary">
-            <Calendar size={18} />
-            <span className="text-xs mt-1">Dashboard</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="flex flex-col py-2">
-            <Plus size={18} />
-            <span className="text-xs mt-1">Add</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="flex flex-col py-2">
-            <TrendingUp size={18} />
-            <span className="text-xs mt-1">Analytics</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="flex flex-col py-2">
-            <BookOpen size={18} />
-            <span className="text-xs mt-1">Syllabus</span>
-          </Button>
-        </div>
       </div>
     </div>
   );
