@@ -5,8 +5,8 @@ A GATE ECE (Graduate Aptitude Test in Engineering - Electronics and Communicatio
 # User Preferences
 
 - Preferred communication style: Simple, everyday language.
-- Data storage: JSON files instead of database
-- Recent Changes: Converted from PostgreSQL to JSON file storage for simplified deployment and data management
+- Data storage: Client-side localStorage instead of server-side storage
+- Recent Changes: Converted to client-side Vite application using localStorage for Vercel deployment
 
 # System Architecture
 
@@ -21,22 +21,22 @@ A GATE ECE (Graduate Aptitude Test in Engineering - Electronics and Communicatio
 - **Recharts** for data visualization and analytics charts
 
 ## Backend Architecture
-- **Express.js** server with TypeScript
-- **RESTful API** design pattern for client-server communication
-- **Drizzle ORM** for database operations with type-safe queries
-- **Zod** schemas for API request/response validation
-- **Session-based** request logging middleware
-- **Storage abstraction layer** for database operations
+- **Minimal Express.js** server for Vite development
+- **Client-side API layer** simulating REST endpoints
+- **LocalStorage implementation** with type-safe operations
+- **Zod** schemas for data validation
+- **Storage abstraction layer** for localStorage operations
+- **Serverless-ready** for static deployment platforms
 
-## Database Design
-- **JSON file storage** for simplified data persistence
-- **Local file-based storage** with automatic directory creation
-- **Data files** for:
-  - subjects.json - GATE ECE curriculum subjects with topics
-  - question-attempts.json - Study session tracking
-  - daily-progress.json - Daily targets and streak tracking  
-  - user-settings.json - User preferences and reminders
-  - users.json - User authentication data
+## Data Storage Design
+- **Client-side localStorage** for data persistence
+- **Browser-based storage** with automatic initialization
+- **Storage collections** for:
+  - subjects - GATE ECE curriculum subjects with topics
+  - question-attempts - Study session tracking
+  - daily-progress - Daily targets and streak tracking  
+  - user-settings - User preferences and reminders
+  - users - User authentication data
 
 ## Key Design Patterns
 - **Repository Pattern**: Storage abstraction layer isolates database logic

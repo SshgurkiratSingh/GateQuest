@@ -1,53 +1,59 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { storage } from "./storage";
 
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-}
+const DEMO_USER_ID = "demo-user-id";
 
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  await throwIfResNotOk(res);
-  return res;
-}
-
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+// Mock API layer for client-side storage
+export const api = {
+  subjects: {
+    getAll: () => storage.getAllSubjects(),
+    getById: (id: string) => storage.getSubject(id),
+  },
+  
+  questionAttempts: {
+    create: (data: any) => storage.createQuestionAttempt(DEMO_USER_ID, data),
+    getByUser: (limit?: number) => storage.getQuestionAttemptsByUser(DEMO_USER_ID, limit),
+  },
+  
+  dailyProgress: {
+    getToday: async () => {
+      const today = new Date();
+      const progress = await storage.getDailyProgress(DEMO_USER_ID, today);
+      const attempts = await storage.getQuestionAttemptsByDate(DEMO_USER_ID, today);
+      
+      const questionsToday = attempts.reduce((sum, a) => sum + a.questionsAttempted, 0);
+      const correctToday = attempts.reduce((sum, a) => sum + a.correctAnswers, 0);
+      const timeToday = attempts.reduce((sum, a) => sum + a.timeSpent, 0);
+      
+      return {
+        progress,
+        attempts,
+        questionsToday,
+        accuracyRate: questionsToday > 0 ? Math.round((correctToday / questionsToday) * 100) : 0,
+        timeSpent: timeToday
+      };
     }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+  },
+  
+  analytics: {
+    getSubjects: () => storage.getSubjectStats(DEMO_USER_ID),
+    getWeekly: () => storage.getWeeklyStats(DEMO_USER_ID),
+  },
+  
+  streak: {
+    getCurrent: async () => {
+      const streak = await storage.getCurrentStreak(DEMO_USER_ID);
+      return { streak };
+    }
+  }
+};
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 5 * 60 * 1000, // 5 minutes
       retry: false,
     },
     mutations: {

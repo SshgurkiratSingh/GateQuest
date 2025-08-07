@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, api } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -107,41 +107,42 @@ export default function Dashboard() {
 
   // API Queries
   const { data: subjects = [], isLoading: loadingSubjects } = useQuery({
-    queryKey: ["/api/subjects"],
+    queryKey: ["subjects"],
+    queryFn: api.subjects.getAll,
   });
 
   const { data: dailyProgress, isLoading: loadingProgress } = useQuery<DailyProgressResponse>({
-    queryKey: ["/api/daily-progress/today"],
+    queryKey: ["daily-progress", "today"],
+    queryFn: api.dailyProgress.getToday,
   });
 
   const { data: weeklyStats = [], isLoading: loadingWeekly } = useQuery({
-    queryKey: ["/api/analytics/weekly"],
+    queryKey: ["analytics", "weekly"],
+    queryFn: api.analytics.getWeekly,
   });
 
   const { data: subjectStats = [], isLoading: loadingSubjects2 } = useQuery<AnalyticsData[]>({
-    queryKey: ["/api/analytics/subjects"],
+    queryKey: ["analytics", "subjects"],
+    queryFn: api.analytics.getSubjects,
   });
 
   const { data: streakData, isLoading: loadingStreak } = useQuery({
-    queryKey: ["/api/streak"],
+    queryKey: ["streak"],
+    queryFn: api.streak.getCurrent,
   });
 
   // Mutations
   const questionMutation = useMutation({
-    mutationFn: async (data: QuestionAttemptForm) => {
-      const response = await apiRequest("POST", "/api/question-attempts", data);
-      return response.json();
-    },
+    mutationFn: api.questionAttempts.create,
     onSuccess: () => {
       toast({
         title: "Success!",
         description: "Question attempt logged successfully.",
       });
       form.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/daily-progress/today"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/weekly"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/analytics/subjects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/streak"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-progress"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["streak"] });
     },
     onError: (error) => {
       toast({
