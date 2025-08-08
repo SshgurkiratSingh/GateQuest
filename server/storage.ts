@@ -26,6 +26,8 @@ export interface IStorage {
 
   // Question attempt methods
   createQuestionAttempt(userId: string, attempt: InsertQuestionAttempt): Promise<QuestionAttempt>;
+  getAllQuestionAttempts(): Promise<QuestionAttempt[]>;
+  importQuestionAttempts(attempts: QuestionAttempt[]): Promise<void>;
   getQuestionAttemptsByUser(userId: string, limit?: number): Promise<QuestionAttempt[]>;
   getQuestionAttemptsByDate(userId: string, date: Date): Promise<QuestionAttempt[]>;
   getQuestionAttemptsBySubject(userId: string, subjectId: string): Promise<QuestionAttempt[]>;
@@ -142,6 +144,14 @@ export class JsonStorage implements IStorage {
     attempts.push(newAttempt);
     await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, attempts);
     return newAttempt;
+  }
+
+  async getAllQuestionAttempts(): Promise<QuestionAttempt[]> {
+    return await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+  }
+
+  async importQuestionAttempts(attempts: QuestionAttempt[]): Promise<void> {
+    await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, attempts);
   }
 
   async getQuestionAttemptsByUser(userId: string, limit: number = 100): Promise<QuestionAttempt[]> {

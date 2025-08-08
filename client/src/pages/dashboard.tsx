@@ -45,9 +45,11 @@ import {
   Info,
   Bell
 } from "lucide-react";
+import { useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import type { Subject, QuestionAttempt } from "@shared/schema";
+import { HistoryTab } from "./history-tab";
 
 const COLORS = [
   "#1976D2", "#388E3C", "#FF9800", "#9C27B0", 
@@ -91,6 +93,7 @@ export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form setup
   const form = useForm<QuestionAttemptForm>({
@@ -166,6 +169,58 @@ export default function Dashboard() {
   const selectedSubject = subjects.find((s: Subject) => s.id === selectedSubjectId);
   const currentStreak = streakData?.streak || 0;
   const progressPercentage = dailyProgress ? Math.round((dailyProgress.questionsToday / 30) * 100) : 0;
+
+  const handleExport = async () => {
+    const res = await fetch("/api/export");
+    const data = await res.json();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "question-attempts.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result;
+        if (typeof content !== 'string') return;
+        const data = JSON.parse(content);
+
+        const res = await fetch("/api/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+
+        if (!res.ok) throw new Error("Failed to import data");
+
+        toast({
+          title: "Success!",
+          description: "Data imported successfully.",
+        });
+        queryClient.invalidateQueries({ queryKey: ["question-attempts"] });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to import data. Please check the file format.",
+          variant: "destructive",
+        });
+      }
+    };
+    reader.readAsText(file);
+  };
 
   if (loadingSubjects) {
     return (
@@ -265,11 +320,12 @@ export default function Dashboard() {
         </div>
 
         <Tabs defaultValue="log" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="log">Log Questions</TabsTrigger>
             <TabsTrigger value="progress">Progress</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="subjects">Subjects</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
           {/* Log Questions Tab */}
@@ -609,6 +665,29 @@ export default function Dashboard() {
                 </Card>
               ))}
             </div>
+          </TabsContent>
+
+          {/* History Tab */}
+          <TabsContent value="history" className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>All Question Attempts</CardTitle>
+                <div className="space-x-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept=".json"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleImportClick}>Import</Button>
+                  <Button variant="outline" size="sm" onClick={handleExport}>Export</Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <HistoryTab onExport={handleExport} />
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
