@@ -28,6 +28,7 @@ export interface IStorage {
   createQuestionAttempt(userId: string, attempt: InsertQuestionAttempt): Promise<QuestionAttempt>;
   getAllQuestionAttempts(): Promise<QuestionAttempt[]>;
   importQuestionAttempts(attempts: QuestionAttempt[]): Promise<void>;
+  exportAllData(): Promise<JsonData>;
   getQuestionAttemptsByUser(userId: string, limit?: number): Promise<QuestionAttempt[]>;
   getQuestionAttemptsByDate(userId: string, date: Date): Promise<QuestionAttempt[]>;
   getQuestionAttemptsBySubject(userId: string, subjectId: string): Promise<QuestionAttempt[]>;
@@ -151,7 +152,29 @@ export class JsonStorage implements IStorage {
   }
 
   async importQuestionAttempts(attempts: QuestionAttempt[]): Promise<void> {
-    await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, attempts);
+    const existingAttempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    const newAttempts = attempts.filter(newAttempt =>
+      !existingAttempts.some(existingAttempt => existingAttempt.id === newAttempt.id)
+    );
+    const allAttempts = [...existingAttempts, ...newAttempts];
+    await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, allAttempts);
+  }
+
+  async exportAllData(): Promise<JsonData> {
+    const users = await this.readJsonFile<User[]>(USERS_FILE, []);
+    const subjects = await this.readJsonFile<Subject[]>(SUBJECTS_FILE, []);
+    const questionAttempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    const dailyProgress = await this.readJsonFile<DailyProgress[]>(DAILY_PROGRESS_FILE, []);
+    const userSettings = await this.readJsonFile<UserSettings[]>(USER_SETTINGS_FILE, []);
+    return { users, subjects, questionAttempts, dailyProgress, userSettings };
+  }
+
+  async importAllData(data: JsonData): Promise<void> {
+    await this.writeJsonFile(USERS_FILE, data.users);
+    await this.writeJsonFile(SUBJECTS_FILE, data.subjects);
+    await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, data.questionAttempts);
+    await this.writeJsonFile(DAILY_PROGRESS_FILE, data.dailyProgress);
+    await this.writeJsonFile(USER_SETTINGS_FILE, data.userSettings);
   }
 
   async getQuestionAttemptsByUser(userId: string, limit: number = 100): Promise<QuestionAttempt[]> {

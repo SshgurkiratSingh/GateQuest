@@ -137,8 +137,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Export all question attempts
   app.get("/api/export", async (req, res) => {
     try {
-      const attempts = await storage.getAllQuestionAttempts();
-      res.json(attempts);
+      const data = await storage.exportAllData();
+      res.json(data);
     } catch (error) {
       res.status(500).json({ message: "Failed to export data" });
     }
@@ -147,15 +147,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Import question attempts
   app.post("/api/import", async (req, res) => {
     try {
-      const attempts = z.array(z.any()).parse(req.body);
-      await storage.importQuestionAttempts(attempts as any);
+      // Full data import
+      await storage.importAllData(req.body);
       res.json({ message: "Import successful" });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Failed to import data" });
-      }
+      console.error("Import error:", error);
+      res.status(500).json({ message: "Failed to import data" });
     }
   });
 

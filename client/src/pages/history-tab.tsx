@@ -5,11 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Subject, QuestionAttempt } from "@shared/schema";
 
-interface HistoryTabProps {
-  onExport: () => void;
-}
-
-export function HistoryTab({ onExport }: HistoryTabProps) {
+export function HistoryTab() {
   const { data: attempts = [], isLoading } = useQuery<QuestionAttempt[]>({
     queryKey: ["question-attempts"],
     queryFn: () => api.questionAttempts.getByUser(),

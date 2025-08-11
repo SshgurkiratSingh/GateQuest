@@ -171,16 +171,31 @@ export default function Dashboard() {
   const progressPercentage = dailyProgress ? Math.round((dailyProgress.questionsToday / 30) * 100) : 0;
 
   const handleExport = async () => {
-    const res = await fetch("/api/export");
-    const data = await res.json();
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "question-attempts.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const res = await fetch("/api/export");
+      if (!res.ok) throw new Error("Failed to export data");
+      const data = await res.json();
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "gate-ece-tracker-data.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Success!",
+        description: "All data exported successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export data. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleImportClick = () => {
@@ -208,9 +223,16 @@ export default function Dashboard() {
 
         toast({
           title: "Success!",
-          description: "Data imported successfully.",
+          description: "Data imported successfully. The page will now reload.",
         });
-        queryClient.invalidateQueries({ queryKey: ["question-attempts"] });
+
+        // Invalidate all queries to refetch data
+        await queryClient.invalidateQueries();
+        // short delay to allow queries to refetch
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+
       } catch (error) {
         toast({
           title: "Error",
@@ -685,7 +707,7 @@ export default function Dashboard() {
                 </div>
               </CardHeader>
               <CardContent>
-                <HistoryTab onExport={handleExport} />
+                <HistoryTab />
               </CardContent>
             </Card>
           </TabsContent>
