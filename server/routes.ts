@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertQuestionAttemptSchema, insertDailyProgressSchema } from "@shared/schema";
@@ -112,6 +112,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get topic-wise analytics
+  app.get("/api/analytics/topics", async (req, res) => {
+    try {
+      const userId = "demo-user-id";
+      const topicStats = await storage.getTopicStats(userId);
+      res.json(topicStats);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch topic analytics" });
+    }
+  });
+
   // Get user stats
   app.get("/api/analytics/user", async (req, res) => {
     try {
@@ -134,21 +145,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get random topic
+  app.get("/api/random-topic", async (req, res) => {
+    try {
+      const subjects = await storage.getAllSubjects();
+      if (subjects.length === 0) {
+        return res.status(404).json({ message: "No subjects found" });
+      }
+      const randomSubject = subjects[Math.floor(Math.random() * subjects.length)];
+      if (randomSubject.topics.length === 0) {
+        return res.status(404).json({ message: "No topics found for the selected subject" });
+      }
+      const randomTopic = randomSubject.topics[Math.floor(Math.random() * randomSubject.topics.length)];
+      res.json({
+        subjectId: randomSubject.id,
+        topic: randomTopic,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch random topic" });
+    }
+  });
+
   // Export all question attempts
   app.get("/api/export", async (req, res) => {
     try {
-      const data = await storage.exportAllData();
-      res.json(data);
+      const csvData = await storage.exportQuestionAttemptsCsv();
+      res.header("Content-Type", "text/csv");
+      res.attachment("question-attempts.csv");
+      res.send(csvData);
     } catch (error) {
       res.status(500).json({ message: "Failed to export data" });
     }
   });
 
   // Import question attempts
-  app.post("/api/import", async (req, res) => {
+  app.post("/api/import", express.text({ type: "text/csv" }), async (req, res) => {
     try {
-      // Full data import
-      await storage.importAllData(req.body);
+      await storage.importQuestionAttemptsCsv(req.body);
       res.json({ message: "Import successful" });
     } catch (error) {
       console.error("Import error:", error);

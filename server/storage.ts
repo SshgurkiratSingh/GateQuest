@@ -12,6 +12,7 @@ import {
 } from "@shared/schema";
 import { promises as fs } from "fs";
 import { join } from "path";
+import Papa from "papaparse";
 
 export interface IStorage {
   // User methods
@@ -28,7 +29,8 @@ export interface IStorage {
   createQuestionAttempt(userId: string, attempt: InsertQuestionAttempt): Promise<QuestionAttempt>;
   getAllQuestionAttempts(): Promise<QuestionAttempt[]>;
   importQuestionAttempts(attempts: QuestionAttempt[]): Promise<void>;
-  exportAllData(): Promise<JsonData>;
+  exportQuestionAttemptsCsv(): Promise<string>;
+  importQuestionAttemptsCsv(csvData: string): Promise<void>;
   getQuestionAttemptsByUser(userId: string, limit?: number): Promise<QuestionAttempt[]>;
   getQuestionAttemptsByDate(userId: string, date: Date): Promise<QuestionAttempt[]>;
   getQuestionAttemptsBySubject(userId: string, subjectId: string): Promise<QuestionAttempt[]>;
@@ -41,6 +43,7 @@ export interface IStorage {
 
   // Analytics methods
   getSubjectStats(userId: string): Promise<any[]>;
+  getTopicStats(userId: string): Promise<any[]>;
   getWeeklyStats(userId: string): Promise<any[]>;
   getUserStats(userId: string): Promise<any>;
 
@@ -55,14 +58,6 @@ const SUBJECTS_FILE = join(DATA_DIR, 'subjects.json');
 const QUESTION_ATTEMPTS_FILE = join(DATA_DIR, 'question-attempts.json');
 const DAILY_PROGRESS_FILE = join(DATA_DIR, 'daily-progress.json');
 const USER_SETTINGS_FILE = join(DATA_DIR, 'user-settings.json');
-
-interface JsonData {
-  users: User[];
-  subjects: Subject[];
-  questionAttempts: QuestionAttempt[];
-  dailyProgress: DailyProgress[];
-  userSettings: UserSettings[];
-}
 
 export class JsonStorage implements IStorage {
   private async ensureDataDir(): Promise<void> {
@@ -160,21 +155,18 @@ export class JsonStorage implements IStorage {
     await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, allAttempts);
   }
 
-  async exportAllData(): Promise<JsonData> {
-    const users = await this.readJsonFile<User[]>(USERS_FILE, []);
-    const subjects = await this.readJsonFile<Subject[]>(SUBJECTS_FILE, []);
+  async exportQuestionAttemptsCsv(): Promise<string> {
     const questionAttempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
-    const dailyProgress = await this.readJsonFile<DailyProgress[]>(DAILY_PROGRESS_FILE, []);
-    const userSettings = await this.readJsonFile<UserSettings[]>(USER_SETTINGS_FILE, []);
-    return { users, subjects, questionAttempts, dailyProgress, userSettings };
+    return Papa.unparse(questionAttempts);
   }
 
-  async importAllData(data: JsonData): Promise<void> {
-    await this.writeJsonFile(USERS_FILE, data.users);
-    await this.writeJsonFile(SUBJECTS_FILE, data.subjects);
-    await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, data.questionAttempts);
-    await this.writeJsonFile(DAILY_PROGRESS_FILE, data.dailyProgress);
-    await this.writeJsonFile(USER_SETTINGS_FILE, data.userSettings);
+  async importQuestionAttemptsCsv(csvData: string): Promise<void> {
+    const parsed = Papa.parse<QuestionAttempt>(csvData, {
+      header: true,
+      dynamicTyping: true,
+    });
+    const newAttempts = parsed.data;
+    await this.importQuestionAttempts(newAttempts);
   }
 
   async getQuestionAttemptsByUser(userId: string, limit: number = 100): Promise<QuestionAttempt[]> {
@@ -297,6 +289,43 @@ export class JsonStorage implements IStorage {
     });
 
     return Array.from(subjectMap.values()).map(stat => ({
+      ...stat,
+      accuracy: stat.totalQuestions > 0 ? Math.round((stat.totalCorrect / stat.totalQuestions) * 100) : 0,
+      avgTime: stat.totalQuestions > 0 ? Math.round(stat.totalTime / stat.totalQuestions * 10) / 10 : 0,
+    }));
+  }
+
+  async getTopicStats(userId: string): Promise<any[]> {
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+    const subjects = await this.readJsonFile<Subject[]>(SUBJECTS_FILE, []);
+
+    const userAttempts = attempts.filter(a => a.userId === userId);
+    const topicMap = new Map<string, any>();
+
+    userAttempts.forEach(attempt => {
+      const subject = subjects.find(s => s.id === attempt.subjectId);
+      if (!subject) return;
+
+      const topicKey = `${attempt.subjectId}-${attempt.topic}`;
+      if (!topicMap.has(topicKey)) {
+        topicMap.set(topicKey, {
+          topicName: attempt.topic,
+          subjectName: subject.name,
+          totalQuestions: 0,
+          totalCorrect: 0,
+          totalTime: 0,
+          attemptCount: 0,
+        });
+      }
+
+      const stat = topicMap.get(topicKey);
+      stat.totalQuestions += attempt.questionsAttempted;
+      stat.totalCorrect += attempt.correctAnswers;
+      stat.totalTime += attempt.timeSpent;
+      stat.attemptCount += 1;
+    });
+
+    return Array.from(topicMap.values()).map(stat => ({
       ...stat,
       accuracy: stat.totalQuestions > 0 ? Math.round((stat.totalCorrect / stat.totalQuestions) * 100) : 0,
       avgTime: stat.totalQuestions > 0 ? Math.round(stat.totalTime / stat.totalQuestions * 10) / 10 : 0,
