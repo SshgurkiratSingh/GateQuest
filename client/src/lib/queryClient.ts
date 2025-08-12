@@ -3,41 +3,48 @@ import { storage } from "./storage";
 
 const DEMO_USER_ID = "demo-user-id";
 
-async function fetcher(url: string, options?: RequestInit) {
-  const res = await fetch(url, options);
-  if (!res.ok) {
-    throw new Error(`Request failed with status ${res.status}`);
-  }
-  return res.json();
-}
-
-// API layer for client-side calls
+// Mock API layer for client-side storage
 export const api = {
   subjects: {
-    getAll: () => fetcher("/api/subjects"),
+    getAll: () => storage.getAllSubjects(),
+    getById: (id: string) => storage.getSubject(id),
   },
   
   questionAttempts: {
-    create: (data: any) => fetcher("/api/question-attempts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }),
-    getByUser: (limit?: number) => fetcher(`/api/question-attempts?limit=${limit || 100}`),
+    create: (data: any) => storage.createQuestionAttempt(DEMO_USER_ID, data),
+    getByUser: (limit?: number) => storage.getQuestionAttemptsByUser(DEMO_USER_ID, limit),
   },
   
   dailyProgress: {
-    getToday: () => fetcher("/api/daily-progress/today"),
+    getToday: async () => {
+      const today = new Date();
+      const progress = await storage.getDailyProgress(DEMO_USER_ID, today);
+      const attempts = await storage.getQuestionAttemptsByDate(DEMO_USER_ID, today);
+      
+      const questionsToday = attempts.reduce((sum, a) => sum + a.questionsAttempted, 0);
+      const correctToday = attempts.reduce((sum, a) => sum + a.correctAnswers, 0);
+      const timeToday = attempts.reduce((sum, a) => sum + a.timeSpent, 0);
+      
+      return {
+        progress,
+        attempts,
+        questionsToday,
+        accuracyRate: questionsToday > 0 ? Math.round((correctToday / questionsToday) * 100) : 0,
+        timeSpent: timeToday
+      };
+    }
   },
   
   analytics: {
-    getSubjects: () => fetcher("/api/analytics/subjects"),
-    getTopics: () => fetcher("/api/analytics/topics"),
-    getWeekly: () => fetcher("/api/analytics/weekly"),
+    getSubjects: () => storage.getSubjectStats(DEMO_USER_ID),
+    getWeekly: () => storage.getWeeklyStats(DEMO_USER_ID),
   },
   
   streak: {
-    getCurrent: () => fetcher("/api/streak"),
+    getCurrent: async () => {
+      const streak = await storage.getCurrentStreak(DEMO_USER_ID);
+      return { streak };
+    }
   }
 };
 

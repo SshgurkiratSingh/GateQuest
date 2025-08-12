@@ -1,4 +1,4 @@
-import { useState, useRef, FC } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, api } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
@@ -7,20 +7,54 @@ import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Microchip, Target, Clock, TrendingUp, BookOpen, Calendar, Plus, Moon, Sun, Flame, CheckCircle, AlertTriangle, Info, Bell, Shuffle } from "lucide-react";
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  LineChart, 
+  Line,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from "recharts";
+import { 
+  Microchip, 
+  Target, 
+  Clock, 
+  TrendingUp, 
+  BookOpen, 
+  Calendar,
+  Plus,
+  Moon,
+  Sun,
+  Flame,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  Bell
+} from "lucide-react";
+import { useRef } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { useToast } from "@/hooks/use-toast";
 import type { Subject, QuestionAttempt } from "@shared/schema";
 import { HistoryTab } from "./history-tab";
 
-const COLORS = ["#1976D2", "#388E3C", "#FF9800", "#9C27B0", "#F44336", "#607D8B", "#795548", "#3F51B5"];
+const COLORS = [
+  "#1976D2", "#388E3C", "#FF9800", "#9C27B0", 
+  "#F44336", "#607D8B", "#795548", "#3F51B5"
+];
 
 const questionAttemptSchema = z.object({
   subjectId: z.string().min(1, "Please select a subject"),
@@ -55,21 +89,13 @@ interface AnalyticsData {
   averageTime: number;
 }
 
-interface TopicStatsData {
-  topicName: string;
-  subjectName: string;
-  totalQuestions: number;
-  totalCorrect: number;
-  accuracy: number;
-  avgTime: number;
-}
-
-const Dashboard: FC = () => {
+export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Form setup
   const form = useForm<QuestionAttemptForm>({
     resolver: zodResolver(questionAttemptSchema),
     defaultValues: {
@@ -82,7 +108,8 @@ const Dashboard: FC = () => {
     },
   });
 
-  const { data: subjects = [], isLoading: loadingSubjects } = useQuery<Subject[]>({
+  // API Queries
+  const { data: subjects = [], isLoading: loadingSubjects } = useQuery({
     queryKey: ["subjects"],
     queryFn: api.subjects.getAll,
   });
@@ -92,7 +119,7 @@ const Dashboard: FC = () => {
     queryFn: api.dailyProgress.getToday,
   });
 
-  const { data: weeklyStats = [], isLoading: loadingWeekly } = useQuery<any[]>({
+  const { data: weeklyStats = [], isLoading: loadingWeekly } = useQuery({
     queryKey: ["analytics", "weekly"],
     queryFn: api.analytics.getWeekly,
   });
@@ -102,18 +129,14 @@ const Dashboard: FC = () => {
     queryFn: api.analytics.getSubjects,
   });
 
-  const { data: topicStats = [], isLoading: loadingTopics } = useQuery<TopicStatsData[]>({
-    queryKey: ["analytics", "topics"],
-    queryFn: api.analytics.getTopics,
-  });
-
-  const { data: streakData, isLoading: loadingStreak } = useQuery<{ streak: number }>({
+  const { data: streakData, isLoading: loadingStreak } = useQuery({
     queryKey: ["streak"],
     queryFn: api.streak.getCurrent,
   });
 
+  // Mutations
   const questionMutation = useMutation({
-    mutationFn: (data: QuestionAttemptForm) => api.questionAttempts.create(data),
+    mutationFn: api.questionAttempts.create,
     onSuccess: () => {
       toast({
         title: "Success!",
@@ -124,7 +147,7 @@ const Dashboard: FC = () => {
       queryClient.invalidateQueries({ queryKey: ["analytics"] });
       queryClient.invalidateQueries({ queryKey: ["streak"] });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Error",
         description: "Failed to log question attempt. Please try again.",
@@ -136,52 +159,35 @@ const Dashboard: FC = () => {
   const handleSubmit = (data: QuestionAttemptForm) => {
     if (data.correctAnswers > data.questionsAttempted) {
       form.setError("correctAnswers", {
-        message: "Correct answers cannot exceed questions attempted",
+        message: "Correct answers cannot exceed questions attempted"
       });
       return;
     }
     questionMutation.mutate(data);
   };
 
-  const handleSuggestTopic = async () => {
-    try {
-      const res = await fetch("/api/random-topic");
-      if (!res.ok) throw new Error("Failed to suggest topic");
-      const data = await res.json();
-      form.setValue("subjectId", data.subjectId);
-      setSelectedSubjectId(data.subjectId);
-      form.setValue("topic", data.topic);
-      const subjectName = subjects.find((s: Subject) => s.id === data.subjectId)?.name;
-      toast({
-        title: "Topic Suggested!",
-        description: `How about studying "${data.topic}" from "${subjectName}"?`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Could not suggest a topic. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
+  const selectedSubject = subjects.find((s: Subject) => s.id === selectedSubjectId);
+  const currentStreak = streakData?.streak || 0;
+  const progressPercentage = dailyProgress ? Math.round((dailyProgress.questionsToday / 30) * 100) : 0;
 
   const handleExport = async () => {
     try {
       const res = await fetch("/api/export");
       if (!res.ok) throw new Error("Failed to export data");
-      const csvData = await res.text();
-      const blob = new Blob([csvData], { type: "text/csv" });
+      const data = await res.json();
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "question-attempts.csv";
+      a.download = "gate-ece-tracker-data.json";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({
         title: "Success!",
-        description: "Question attempts exported successfully.",
+        description: "All data exported successfully.",
       });
     } catch (error) {
       toast({
@@ -205,11 +211,12 @@ const Dashboard: FC = () => {
       try {
         const content = e.target?.result;
         if (typeof content !== 'string') return;
+        const data = JSON.parse(content);
 
         const res = await fetch("/api/import", {
           method: "POST",
-          headers: { "Content-Type": "text/csv" },
-          body: content,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
         });
 
         if (!res.ok) throw new Error("Failed to import data");
@@ -219,10 +226,13 @@ const Dashboard: FC = () => {
           description: "Data imported successfully. The page will now reload.",
         });
 
+        // Invalidate all queries to refetch data
         await queryClient.invalidateQueries();
+        // short delay to allow queries to refetch
         setTimeout(() => {
           window.location.reload();
         }, 1000);
+
       } catch (error) {
         toast({
           title: "Error",
@@ -242,12 +252,9 @@ const Dashboard: FC = () => {
     );
   }
 
-  const selectedSubject = subjects.find((s: Subject) => s.id === selectedSubjectId);
-  const currentStreak = streakData?.streak || 0;
-  const progressPercentage = dailyProgress ? Math.round((dailyProgress.questionsToday / 30) * 100) : 0;
-
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="border-b bg-card">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center space-x-4">
@@ -258,7 +265,11 @@ const Dashboard: FC = () => {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            >
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>
           </div>
@@ -266,6 +277,7 @@ const Dashboard: FC = () => {
       </header>
 
       <div className="container mx-auto px-6 py-8 space-y-8">
+        {/* Daily Progress Overview */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -274,22 +286,32 @@ const Dashboard: FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <div className="text-2xl font-bold">{dailyProgress?.questionsToday || 0}/30</div>
+                <div className="text-2xl font-bold">
+                  {dailyProgress?.questionsToday || 0}/30
+                </div>
                 <Progress value={progressPercentage} className="h-2" />
-                <p className="text-xs text-muted-foreground">{progressPercentage}% of daily target</p>
+                <p className="text-xs text-muted-foreground">
+                  {progressPercentage}% of daily target
+                </p>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Accuracy Rate</CardTitle>
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dailyProgress?.accuracyRate || 0}%</div>
-              <p className="text-xs text-muted-foreground">Today's performance</p>
+              <div className="text-2xl font-bold">
+                {dailyProgress?.accuracyRate || 0}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Today's performance
+              </p>
             </CardContent>
           </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Study Streak</CardTitle>
@@ -297,17 +319,24 @@ const Dashboard: FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{currentStreak}</div>
-              <p className="text-xs text-muted-foreground">{currentStreak === 1 ? "day" : "days"} in a row</p>
+              <p className="text-xs text-muted-foreground">
+                {currentStreak === 1 ? "day" : "days"} in a row
+              </p>
             </CardContent>
           </Card>
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Time Spent</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dailyProgress?.timeSpent || 0}m</div>
-              <p className="text-xs text-muted-foreground">Today's study time</p>
+              <div className="text-2xl font-bold">
+                {dailyProgress?.timeSpent || 0}m
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Today's study time
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -321,18 +350,13 @@ const Dashboard: FC = () => {
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
+          {/* Log Questions Tab */}
           <TabsContent value="log" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Plus className="h-5 w-5" />
-                    <span>Log Question Attempt</span>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={handleSuggestTopic}>
-                    <Shuffle className="h-4 w-4 mr-2" />
-                    Suggest a Topic
-                  </Button>
+                <CardTitle className="flex items-center space-x-2">
+                  <Plus className="h-5 w-5" />
+                  <span>Log Question Attempt</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -345,12 +369,12 @@ const Dashboard: FC = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Subject</FormLabel>
-                            <Select
-                              value={field.value}
+                            <Select 
                               onValueChange={(value) => {
                                 field.onChange(value);
                                 setSelectedSubjectId(value);
                               }}
+                              defaultValue={field.value}
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -369,20 +393,21 @@ const Dashboard: FC = () => {
                           </FormItem>
                         )}
                       />
+
                       <FormField
                         control={form.control}
                         name="topic"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Topic</FormLabel>
-                            <Select value={field.value} onValueChange={field.onChange}>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select a topic" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {selectedSubject?.topics.map((topic: string) => (
+                                {selectedSubject?.topics.map((topic) => (
                                   <SelectItem key={topic} value={topic}>
                                     {topic}
                                   </SelectItem>
@@ -393,6 +418,7 @@ const Dashboard: FC = () => {
                           </FormItem>
                         )}
                       />
+
                       <FormField
                         control={form.control}
                         name="questionsAttempted"
@@ -400,12 +426,19 @@ const Dashboard: FC = () => {
                           <FormItem>
                             <FormLabel>Questions Attempted</FormLabel>
                             <FormControl>
-                              <Input type="number" min="1" max="50" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} />
+                              <Input
+                                type="number"
+                                min="1"
+                                max="50"
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value))}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+
                       <FormField
                         control={form.control}
                         name="correctAnswers"
@@ -413,12 +446,18 @@ const Dashboard: FC = () => {
                           <FormItem>
                             <FormLabel>Correct Answers</FormLabel>
                             <FormControl>
-                              <Input type="number" min="0" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} />
+                              <Input
+                                type="number"
+                                min="0"
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value))}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+
                       <FormField
                         control={form.control}
                         name="difficulty"
@@ -441,6 +480,7 @@ const Dashboard: FC = () => {
                           </FormItem>
                         )}
                       />
+
                       <FormField
                         control={form.control}
                         name="timeSpent"
@@ -448,14 +488,25 @@ const Dashboard: FC = () => {
                           <FormItem>
                             <FormLabel>Time Spent (minutes)</FormLabel>
                             <FormControl>
-                              <Input type="number" min="1" max="300" {...field} onChange={(e) => field.onChange(parseInt(e.target.value))} />
+                              <Input
+                                type="number"
+                                min="1"
+                                max="300"
+                                {...field}
+                                onChange={(e) => field.onChange(parseInt(e.target.value))}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
                     </div>
-                    <Button type="submit" className="w-full" disabled={questionMutation.isPending}>
+
+                    <Button 
+                      type="submit" 
+                      className="w-full"
+                      disabled={questionMutation.isPending}
+                    >
                       {questionMutation.isPending ? "Logging..." : "Log Question Attempt"}
                     </Button>
                   </form>
@@ -464,6 +515,7 @@ const Dashboard: FC = () => {
             </Card>
           </TabsContent>
 
+          {/* Progress Tab */}
           <TabsContent value="progress" className="space-y-6">
             <Card>
               <CardHeader>
@@ -482,13 +534,25 @@ const Dashboard: FC = () => {
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Line type="monotone" dataKey="totalQuestions" stroke="#1976D2" name="Questions" />
-                      <Line type="monotone" dataKey="totalCorrect" stroke="#388E3C" name="Correct" />
+                      <Line 
+                        type="monotone" 
+                        dataKey="totalQuestions" 
+                        stroke="#1976D2" 
+                        name="Questions"
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="totalCorrect" 
+                        stroke="#388E3C" 
+                        name="Correct"
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
               </CardContent>
             </Card>
+
+            {/* Recent Attempts */}
             <Card>
               <CardHeader>
                 <CardTitle>Recent Attempts</CardTitle>
@@ -507,12 +571,14 @@ const Dashboard: FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {dailyProgress?.attempts.map((attempt: QuestionAttempt) => {
+                    {dailyProgress?.attempts.map((attempt) => {
                       const subject = subjects.find((s: Subject) => s.id === attempt.subjectId);
                       const accuracy = Math.round((attempt.correctAnswers / attempt.questionsAttempted) * 100);
                       return (
                         <TableRow key={attempt.id}>
-                          <TableCell className="font-medium">{subject?.code || "Unknown"}</TableCell>
+                          <TableCell className="font-medium">
+                            {subject?.code || "Unknown"}
+                          </TableCell>
                           <TableCell>{attempt.topic}</TableCell>
                           <TableCell>{attempt.questionsAttempted}</TableCell>
                           <TableCell>{attempt.correctAnswers}</TableCell>
@@ -534,6 +600,7 @@ const Dashboard: FC = () => {
             </Card>
           </TabsContent>
 
+          {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
@@ -559,6 +626,7 @@ const Dashboard: FC = () => {
                   )}
                 </CardContent>
               </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Accuracy Distribution</CardTitle>
@@ -566,8 +634,17 @@ const Dashboard: FC = () => {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
-                      <Pie data={subjectStats} cx="50%" cy="50%" labelLine={false} label={({ subjectName, accuracy }: { subjectName: string; accuracy: number; }) => `${subjectName}: ${accuracy}%`} outerRadius={80} fill="#8884d8" dataKey="accuracy">
-                        {subjectStats.map((entry: AnalyticsData, index: number) => (
+                      <Pie
+                        data={subjectStats}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ subjectName, accuracy }) => `${subjectName}: ${accuracy}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="accuracy"
+                      >
+                        {subjectStats.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -577,66 +654,32 @@ const Dashboard: FC = () => {
                 </CardContent>
               </Card>
             </div>
-            <Card>
-              <CardHeader>
-                <CardTitle>Topic Performance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Topic</TableHead>
-                      <TableHead>Subject</TableHead>
-                      <TableHead>Questions</TableHead>
-                      <TableHead>Correct</TableHead>
-                      <TableHead>Accuracy</TableHead>
-                      <TableHead>Avg Time (m)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {loadingTopics ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center">Loading...</TableCell>
-                      </TableRow>
-                    ) : (
-                      topicStats.sort((a, b) => a.accuracy - b.accuracy).map((topic: TopicStatsData) => (
-                        <TableRow key={`${topic.subjectName}-${topic.topicName}`}>
-                          <TableCell>{topic.topicName}</TableCell>
-                          <TableCell>{topic.subjectName}</TableCell>
-                          <TableCell>{topic.totalQuestions}</TableCell>
-                          <TableCell>{topic.totalCorrect}</TableCell>
-                          <TableCell>
-                            <Badge variant={topic.accuracy >= 80 ? "default" : topic.accuracy >= 60 ? "secondary" : "destructive"}>
-                              {topic.accuracy}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{topic.avgTime}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
           </TabsContent>
 
+          {/* Subjects Tab */}
           <TabsContent value="subjects" className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {subjects.map((subject: Subject, index: number) => (
+              {subjects.map((subject: Subject, index) => (
                 <Card key={subject.id}>
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                       <span>{subject.name}</span>
-                      <Badge style={{ backgroundColor: COLORS[index % COLORS.length] }}>{subject.code}</Badge>
+                      <Badge style={{ backgroundColor: COLORS[index % COLORS.length] }}>
+                        {subject.code}
+                      </Badge>
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">Weightage: {subject.weightage}%</p>
+                    <p className="text-sm text-muted-foreground">
+                      Weightage: {subject.weightage}%
+                    </p>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       <h4 className="text-sm font-semibold">Topics ({subject.topics.length})</h4>
                       <div className="max-h-32 overflow-y-auto">
-                        {subject.topics.map((topic: string) => (
-                          <Badge key={topic} variant="outline" className="mr-1 mb-1 text-xs">{topic}</Badge>
+                        {subject.topics.map((topic) => (
+                          <Badge key={topic} variant="outline" className="mr-1 mb-1 text-xs">
+                            {topic}
+                          </Badge>
                         ))}
                       </div>
                     </div>
@@ -646,12 +689,19 @@ const Dashboard: FC = () => {
             </div>
           </TabsContent>
 
+          {/* History Tab */}
           <TabsContent value="history" className="space-y-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>All Question Attempts</CardTitle>
                 <div className="space-x-2">
-                  <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".csv" />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                    accept=".json"
+                  />
                   <Button variant="outline" size="sm" onClick={handleImportClick}>Import</Button>
                   <Button variant="outline" size="sm" onClick={handleExport}>Export</Button>
                 </div>
@@ -665,6 +715,4 @@ const Dashboard: FC = () => {
       </div>
     </div>
   );
-};
-
-export default Dashboard;
+}
