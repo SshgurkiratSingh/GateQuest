@@ -193,29 +193,30 @@ export default function Dashboard() {
   const currentStreak = streakData?.streak || 0;
   const progressPercentage = dailyProgress ? Math.round((dailyProgress.questionsToday / 30) * 100) : 0;
 
-  const handleExport = async () => {
+  const handleExport = async (format: "json" | "csv") => {
     try {
-      const res = await fetch("/api/export");
-      if (!res.ok) throw new Error("Failed to export data");
-      const data = await res.json();
-      const json = JSON.stringify(data, null, 2);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
+      const url = format === "csv" ? "/api/export/csv" : "/api/export/json";
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to export data as ${format}`);
+
+      const blob = await res.blob();
+      const downloadUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = "gate-ece-tracker-data.json";
+      a.href = downloadUrl;
+      a.download = `gate-ece-tracker-data.${format}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(downloadUrl);
+
       toast({
         title: "Success!",
-        description: "All data exported successfully.",
+        description: `All data exported as ${format.toUpperCase()} successfully.`,
       });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to export data. Please try again.",
+        description: `Failed to export data as ${format}. Please try again.`,
         variant: "destructive",
       });
     }
@@ -229,42 +230,76 @@ export default function Dashboard() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const content = e.target?.result;
-        if (typeof content !== 'string') return;
-        const data = JSON.parse(content);
+    const isJson = file.type === "application/json";
+    const isCsv = file.type === "text/csv" || file.name.endsWith(".csv");
 
-        const res = await fetch("/api/import", {
+    if (isJson) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const content = e.target?.result;
+          if (typeof content !== 'string') return;
+          const data = JSON.parse(content);
+
+          const res = await fetch("/api/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+
+          if (!res.ok) throw new Error("Failed to import data");
+
+          toast({
+            title: "Success!",
+            description: "JSON data imported successfully. The page will now reload.",
+          });
+
+          await queryClient.invalidateQueries();
+          setTimeout(() => window.location.reload(), 1000);
+
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: "Failed to import JSON data. Please check the file format.",
+            variant: "destructive",
+          });
+        }
+      };
+      reader.readAsText(file);
+    } else if (isCsv) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/import/csv", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
+          body: formData,
         });
 
-        if (!res.ok) throw new Error("Failed to import data");
+        if (!res.ok) throw new Error("Failed to import CSV data");
 
         toast({
           title: "Success!",
-          description: "Data imported successfully. The page will now reload.",
+          description: "CSV data imported successfully. The page will now reload.",
         });
 
-        // Invalidate all queries to refetch data
         await queryClient.invalidateQueries();
-        // short delay to allow queries to refetch
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
+        setTimeout(() => window.location.reload(), 1000);
 
       } catch (error) {
         toast({
           title: "Error",
-          description: "Failed to import data. Please check the file format.",
+          description: "Failed to import CSV data. Please check the file format.",
           variant: "destructive",
         });
       }
-    };
-    reader.readAsText(file);
+    } else {
+      toast({
+        title: "Unsupported File Type",
+        description: "Please select a JSON or CSV file.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loadingSubjects) {
@@ -792,10 +827,11 @@ export default function Dashboard() {
                     ref={fileInputRef}
                     onChange={handleFileChange}
                     className="hidden"
-                    accept=".json"
+                    accept=".json,.csv"
                   />
                   <Button variant="outline" size="sm" onClick={handleImportClick}>Import</Button>
-                  <Button variant="outline" size="sm" onClick={handleExport}>Export</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleExport("csv")}>Export as CSV</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleExport("json")}>Export as JSON</Button>
                 </div>
               </CardHeader>
               <CardContent>

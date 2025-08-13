@@ -3,6 +3,10 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertQuestionAttemptSchema, insertDailyProgressSchema } from "@shared/schema";
 import { z } from "zod";
+import { exportQuestionAttemptsToCsv, importQuestionAttemptsFromCsv } from "./csv";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize GATE ECE subjects data
@@ -158,11 +162,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Export all question attempts
-  app.get("/api/export", async (req, res) => {
+  // Export all question attempts in JSON format
+  app.get("/api/export/json", async (req, res) => {
     try {
       const data = await storage.exportAllData();
       res.json(data);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to export data" });
+    }
+  });
+
+  // Export all question attempts in CSV format
+  app.get("/api/export/csv", async (req, res) => {
+    try {
+      const { questionAttempts } = await storage.exportAllData();
+      const csv = exportQuestionAttemptsToCsv(questionAttempts);
+      res.header("Content-Type", "text/csv");
+      res.attachment("question-attempts.csv");
+      res.send(csv);
     } catch (error) {
       res.status(500).json({ message: "Failed to export data" });
     }
@@ -177,6 +194,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Import error:", error);
       res.status(500).json({ message: "Failed to import data" });
+    }
+  });
+
+  // Import question attempts from CSV
+  app.post("/api/import/csv", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const csvString = req.file.buffer.toString("utf-8");
+      const attempts = importQuestionAttemptsFromCsv(csvString);
+
+      await storage.importQuestionAttempts(attempts);
+      res.json({ message: "CSV data imported successfully" });
+    } catch (error) {
+      console.error("CSV import error:", error);
+      res.status(500).json({ message: "Failed to import CSV data" });
     }
   });
 
