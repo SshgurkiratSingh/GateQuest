@@ -93,6 +93,7 @@ export default function Dashboard() {
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
+  const [analyticsSubjectId, setAnalyticsSubjectId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form setup
@@ -132,6 +133,28 @@ export default function Dashboard() {
   const { data: streakData, isLoading: loadingStreak } = useQuery({
     queryKey: ["streak"],
     queryFn: api.streak.getCurrent,
+  });
+
+  const { data: topicStats = [], isLoading: loadingTopicStats } = useQuery({
+    queryKey: ["analytics", "topics", analyticsSubjectId],
+    queryFn: async () => {
+      if (!analyticsSubjectId) return [];
+      const res = await fetch(`/api/analytics/subjects/${analyticsSubjectId}/topics`);
+      if (!res.ok) throw new Error("Failed to fetch topic stats");
+      return res.json();
+    },
+    enabled: !!analyticsSubjectId,
+  });
+
+  const { data: difficultyStats = [], isLoading: loadingDifficultyStats } = useQuery({
+    queryKey: ["analytics", "difficulty", analyticsSubjectId],
+    queryFn: async () => {
+      if (!analyticsSubjectId) return [];
+      const res = await fetch(`/api/analytics/subjects/${analyticsSubjectId}/difficulty`);
+      if (!res.ok) throw new Error("Failed to fetch difficulty stats");
+      return res.json();
+    },
+    enabled: !!analyticsSubjectId,
   });
 
   // Mutations
@@ -654,6 +677,75 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Detailed Analytics Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Detailed Subject Analysis</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Select a subject to see a detailed breakdown of your performance.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Select onValueChange={setAnalyticsSubjectId} value={analyticsSubjectId ?? ""}>
+                  <SelectTrigger className="w-full md:w-1/2">
+                    <SelectValue placeholder="Select a subject..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects.map((subject: Subject) => (
+                      <SelectItem key={subject.id} value={subject.id}>
+                        {subject.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {analyticsSubjectId && (loadingTopicStats || loadingDifficultyStats) && (
+                  <div className="h-[300px] flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                  </div>
+                )}
+
+                {analyticsSubjectId && !loadingTopicStats && !loadingDifficultyStats && (
+                  <div className="grid gap-6 md:grid-cols-2 mt-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Topic Performance</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={topicStats} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis type="number" />
+                            <YAxis type="category" dataKey="topic" width={80} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="accuracy" fill="#8884d8" name="Accuracy (%)" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Performance by Difficulty</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={difficultyStats}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="difficulty" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="accuracy" fill="#82ca9d" name="Accuracy (%)" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Subjects Tab */}
