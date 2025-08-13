@@ -27,7 +27,7 @@ export interface IStorage {
   // Question attempt methods
   createQuestionAttempt(userId: string, attempt: InsertQuestionAttempt): Promise<QuestionAttempt>;
   getAllQuestionAttempts(): Promise<QuestionAttempt[]>;
-  importQuestionAttempts(attempts: QuestionAttempt[]): Promise<void>;
+  importQuestionAttempts(attempts: InsertQuestionAttempt[]): Promise<void>;
   exportAllData(): Promise<JsonData>;
   getQuestionAttemptsByUser(userId: string, limit?: number): Promise<QuestionAttempt[]>;
   getQuestionAttemptsByDate(userId: string, date: Date): Promise<QuestionAttempt[]>;
@@ -153,11 +153,14 @@ export class JsonStorage implements IStorage {
     return await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
   }
 
-  async importQuestionAttempts(attempts: QuestionAttempt[]): Promise<void> {
+  async importQuestionAttempts(attempts: InsertQuestionAttempt[]): Promise<void> {
     const existingAttempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
-    const newAttempts = attempts.filter(newAttempt =>
-      !existingAttempts.some(existingAttempt => existingAttempt.id === newAttempt.id)
-    );
+    const newAttempts: QuestionAttempt[] = attempts.map(attempt => ({
+      ...attempt,
+      id: this.generateId(),
+      userId: "demo-user-id", // Or get from session
+      attemptDate: new Date(),
+    }));
     const allAttempts = [...existingAttempts, ...newAttempts];
     await this.writeJsonFile(QUESTION_ATTEMPTS_FILE, allAttempts);
   }
