@@ -112,6 +112,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get topic-wise analytics for a subject
+  app.get("/api/analytics/subjects/:subjectId/topics", async (req, res) => {
+    try {
+      const userId = "demo-user-id";
+      const { subjectId } = req.params;
+      const topicStats = await storage.getTopicStats(userId, subjectId);
+      res.json(topicStats);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch topic analytics" });
+    }
+  });
+
+  // Get difficulty-wise analytics for a subject
+  app.get("/api/analytics/subjects/:subjectId/difficulty", async (req, res) => {
+    try {
+      const userId = "demo-user-id";
+      const { subjectId } = req.params;
+      const difficultyStats = await storage.getDifficultyStats(userId, subjectId);
+      res.json(difficultyStats);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch difficulty analytics" });
+    }
+  });
+
   // Get user stats
   app.get("/api/analytics/user", async (req, res) => {
     try {

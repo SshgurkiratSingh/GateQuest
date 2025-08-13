@@ -41,6 +41,8 @@ export interface IStorage {
 
   // Analytics methods
   getSubjectStats(userId: string): Promise<any[]>;
+  getTopicStats(userId: string, subjectId: string): Promise<any[]>;
+  getDifficultyStats(userId: string, subjectId: string): Promise<any[]>;
   getWeeklyStats(userId: string): Promise<any[]>;
   getUserStats(userId: string): Promise<any>;
 
@@ -297,6 +299,71 @@ export class JsonStorage implements IStorage {
     });
 
     return Array.from(subjectMap.values()).map(stat => ({
+      ...stat,
+      accuracy: stat.totalQuestions > 0 ? Math.round((stat.totalCorrect / stat.totalQuestions) * 100) : 0,
+      avgTime: stat.totalQuestions > 0 ? Math.round(stat.totalTime / stat.totalQuestions * 10) / 10 : 0,
+    }));
+  }
+
+  async getTopicStats(userId: string, subjectId: string): Promise<any[]> {
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+
+    const userSubjectAttempts = attempts.filter(a => a.userId === userId && a.subjectId === subjectId);
+    const topicMap = new Map<string, any>();
+
+    userSubjectAttempts.forEach(attempt => {
+      if (!topicMap.has(attempt.topic)) {
+        topicMap.set(attempt.topic, {
+          topic: attempt.topic,
+          totalQuestions: 0,
+          totalCorrect: 0,
+          totalTime: 0,
+          attemptCount: 0,
+        });
+      }
+
+      const stat = topicMap.get(attempt.topic);
+      stat.totalQuestions += attempt.questionsAttempted;
+      stat.totalCorrect += attempt.correctAnswers;
+      stat.totalTime += attempt.timeSpent;
+      stat.attemptCount += 1;
+    });
+
+    return Array.from(topicMap.values()).map(stat => ({
+      ...stat,
+      accuracy: stat.totalQuestions > 0 ? Math.round((stat.totalCorrect / stat.totalQuestions) * 100) : 0,
+      avgTime: stat.totalQuestions > 0 ? Math.round(stat.totalTime / stat.totalQuestions * 10) / 10 : 0,
+    }));
+  }
+
+  async getDifficultyStats(userId: string, subjectId: string): Promise<any[]> {
+    const attempts = await this.readJsonFile<QuestionAttempt[]>(QUESTION_ATTEMPTS_FILE, []);
+
+    const userSubjectAttempts = attempts.filter(a => a.userId === userId && a.subjectId === subjectId);
+    const difficultyMap = new Map<string, any>();
+
+    // Initialize map for all difficulties
+    ["Easy", "Medium", "Hard"].forEach(level => {
+        difficultyMap.set(level, {
+            difficulty: level,
+            totalQuestions: 0,
+            totalCorrect: 0,
+            totalTime: 0,
+            attemptCount: 0,
+        });
+    });
+
+    userSubjectAttempts.forEach(attempt => {
+      const stat = difficultyMap.get(attempt.difficulty);
+      if (stat) {
+        stat.totalQuestions += attempt.questionsAttempted;
+        stat.totalCorrect += attempt.correctAnswers;
+        stat.totalTime += attempt.timeSpent;
+        stat.attemptCount += 1;
+      }
+    });
+
+    return Array.from(difficultyMap.values()).map(stat => ({
       ...stat,
       accuracy: stat.totalQuestions > 0 ? Math.round((stat.totalCorrect / stat.totalQuestions) * 100) : 0,
       avgTime: stat.totalQuestions > 0 ? Math.round(stat.totalTime / stat.totalQuestions * 10) / 10 : 0,
